@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     })
 
     // Create game record
-    const { rows } = await sql`
+    const rows = await sql`
       INSERT INTO games (id, title, video_path, video_filename, status)
       VALUES (${gameId}, ${title ?? null}, ${blob.url}, ${file.name}, 'pending_setup')
       RETURNING *

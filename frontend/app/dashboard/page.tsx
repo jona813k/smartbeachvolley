@@ -44,7 +44,7 @@ export default async function DashboardPage() {
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const { rows } = await sql`SELECT * FROM games ORDER BY created_at DESC`
+  const rows = await sql`SELECT * FROM games ORDER BY created_at DESC`
   const games = rows as unknown as Game[]
 
   return (

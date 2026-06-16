@@ -26,7 +26,7 @@ export async function POST(
     return NextResponse.json({ error: 'court_corners must be an array of 4 [x,y] points' }, { status: 400 })
   }
 
-  const { rows } = await sql`
+  const rows = await sql`
     UPDATE games
     SET
       player_left_1  = ${player_left_1},

@@ -10,7 +10,7 @@ export async function GET(
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { rows } = await sql`SELECT frame_url FROM games WHERE id = ${params.gameId}`
+  const rows = await sql`SELECT frame_url FROM games WHERE id = ${params.gameId}`
   if (!rows[0]) return NextResponse.json({ error: 'Game not found' }, { status: 404 })
   if (!rows[0].frame_url) return NextResponse.json({ error: 'Frame not ready' }, { status: 404 })
 

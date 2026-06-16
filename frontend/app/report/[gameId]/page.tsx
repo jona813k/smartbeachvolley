@@ -14,7 +14,7 @@ export default async function ReportPage({ params }: { params: { gameId: string 
   const session = await getSession()
   if (!session) redirect('/login')
 
-  const { rows } = await sql`SELECT * FROM games WHERE id = ${params.gameId}`
+  const rows = await sql`SELECT * FROM games WHERE id = ${params.gameId}`
   if (!rows[0]) notFound()
 
   const game = rows[0] as unknown as Game

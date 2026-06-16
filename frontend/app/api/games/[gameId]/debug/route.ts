@@ -28,7 +28,7 @@ export async function PATCH(
   }
 
   // Fetch current debug_frames
-  const { rows: gameRows } = await sql`SELECT debug_frames FROM games WHERE id = ${gameId}`
+  const gameRows = await sql`SELECT debug_frames FROM games WHERE id = ${gameId}`
   if (!gameRows[0]) {
     return NextResponse.json({ error: 'Game not found' }, { status: 404 })
   }
@@ -67,7 +67,7 @@ export async function GET(
 
   const { gameId } = params
 
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT id, debug_frames, player_left_1, player_left_2, player_right_1, player_right_2
     FROM games
     WHERE id = ${gameId}

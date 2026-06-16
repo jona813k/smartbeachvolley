@@ -7,7 +7,7 @@ export async function GET() {
   const session = await getSession()
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { rows } = await sql`
+  const rows = await sql`
     SELECT id, title, video_filename, status, created_at, processed_at,
            player_left_1, player_left_2, player_right_1, player_right_2, results
     FROM games
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'video_path and video_filename are required' }, { status: 400 })
   }
 
-  const { rows } = await sql`
+  const rows = await sql`
     INSERT INTO games (title, video_path, video_filename, status)
     VALUES (${title ?? null}, ${video_path}, ${video_filename}, 'pending_setup')
     RETURNING *
