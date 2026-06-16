@@ -5,6 +5,7 @@ import type { Game } from '@/lib/types'
 import Link from 'next/link'
 import { formatDistanceToNow } from '@/lib/utils'
 import SignOutButton from '@/components/SignOutButton'
+import DeleteGameButton from '@/components/DeleteGameButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -127,6 +128,9 @@ export default async function DashboardPage() {
                     <span className="text-xs font-medium">Debug</span>
                   </Link>
                 )}
+
+                {/* Delete button — always visible */}
+                <DeleteGameButton gameId={game.id} />
               </div>
             ))}
           </div>

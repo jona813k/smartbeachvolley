@@ -1,7 +1,7 @@
 """
 worker.py — Main polling loop for the SmartBeachVolley ML pipeline.
 
-Polls Supabase every POLL_INTERVAL_SECONDS for games with status 'queued',
+Polls Neon every POLL_INTERVAL_SECONDS for games with status 'queued',
 then runs the full ML pipeline on each one.
 
 Usage:
@@ -24,8 +24,6 @@ from dotenv import load_dotenv
 # Load .env from the directory containing this script
 load_dotenv(Path(__file__).parent / ".env")
 
-from supabase import create_client
-
 import storage
 import court
 import players
@@ -43,22 +41,6 @@ log = logging.getLogger(__name__)
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL_SECONDS", "30"))
 
 
-def get_queued_game() -> dict | None:
-    """Fetch one queued game from Supabase."""
-    client = storage.get_client()
-    result = (
-        client.table("games")
-        .select("*")
-        .eq("status", "queued")
-        .order("created_at")
-        .limit(1)
-        .execute()
-    )
-    if result.data:
-        return result.data[0]
-    return None
-
-
 def process_game(game: dict) -> None:
     game_id = game["id"]
     log.info(f"Processing game {game_id} ({game.get('video_filename', '')})")
@@ -70,7 +52,7 @@ def process_game(game: dict) -> None:
         video_path = os.path.join(tmpdir, "video.mp4")
         frame_path = os.path.join(tmpdir, "frame.jpg")
 
-        # 1. Download video
+        # 1. Download video from Vercel Blob public URL
         log.info(f"  Downloading video: {game['video_path']}")
         storage.download_video(game_id, game["video_path"], video_path)
 
@@ -154,8 +136,8 @@ def process_game(game: dict) -> None:
         debug_frames_meta: list[dict] = []
         for meta, jpeg_bytes in debug_frames_raw:
             try:
-                storage_path = storage.upload_debug_frame(game_id, meta.index, jpeg_bytes)
-                meta.frame_path = storage_path
+                blob_url = storage.upload_debug_frame(game_id, meta.index, jpeg_bytes)
+                meta.frame_path = blob_url
             except Exception as e:
                 log.warning(f"  Debug frame upload failed (event {meta.index}): {e}")
 
@@ -177,7 +159,7 @@ def process_game(game: dict) -> None:
         score_left = rallies[-1].score_left if rallies else 0
         score_right = rallies[-1].score_right if rallies else 0
 
-        # 8. Build results JSON
+        # 9. Build results JSON
         player_stats = events_module.compute_player_stats(game_events, player_names)
         heatmap_data = events_module.build_heatmap_data(game_events)
 
@@ -210,12 +192,16 @@ def process_game(game: dict) -> None:
             ],
         }
 
-        # 9. Write results + debug frames to Supabase
-        log.info("  Writing results to Supabase…")
+        # 10. Write results + debug frames to Neon
+        log.info("  Writing results…")
         storage.write_results(game_id, results)
         if debug_frames_meta:
             storage.write_debug_frames(game_id, debug_frames_meta)
         log.info(f"  Done! Score: {score_left}–{score_right}")
+
+        # 11. POC cleanup — delete the video blob to save storage
+        log.info("  Deleting video blob (POC cleanup)…")
+        storage.delete_video_blob(game["video_path"])
 
 
 def main():
@@ -223,7 +209,7 @@ def main():
 
     while True:
         try:
-            game = get_queued_game()
+            game = storage.fetch_queued_game()
             if game:
                 try:
                     process_game(game)
@@ -231,6 +217,9 @@ def main():
                     log.error(f"Failed to process game {game['id']}: {e}")
                     traceback.print_exc()
                     storage.write_error(game["id"], str(e))
+                    # Still try to clean up the video blob on error
+                    if game.get("video_path"):
+                        storage.delete_video_blob(game["video_path"])
             else:
                 log.debug("No queued games. Sleeping…")
         except Exception as e:
