@@ -3,6 +3,7 @@
 import { useState, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { upload } from '@vercel/blob/client'
 
 export default function UploadPage() {
   const router = useRouter()
@@ -38,36 +39,32 @@ export default function UploadPage() {
 
     setUploading(true)
     setError('')
-
-    // Use XMLHttpRequest for upload progress
-    const formData = new FormData()
-    formData.append('video', file)
-    if (title.trim()) formData.append('title', title.trim())
+    setProgress(0)
 
     try {
-      await new Promise<void>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhr.open('POST', '/api/upload')
-        xhr.upload.onprogress = (ev) => {
-          if (ev.lengthComputable) setProgress(Math.round((ev.loaded / ev.total) * 100))
-        }
-        xhr.onload = () => {
-          if (xhr.status === 201) {
-            const data = JSON.parse(xhr.responseText)
-            router.push(`/setup/${data.id}`)
-            resolve()
-          } else {
-            try {
-              const data = JSON.parse(xhr.responseText)
-              reject(new Error(data.error || 'Upload failed'))
-            } catch {
-              reject(new Error('Upload failed'))
-            }
-          }
-        }
-        xhr.onerror = () => reject(new Error('Network error'))
-        xhr.send(formData)
+      // Step 1: Pre-create the game row to get a stable gameId
+      const initRes = await fetch('/api/games/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ title: title.trim() || null }),
       })
+      if (!initRes.ok) {
+        const d = await initRes.json().catch(() => ({}))
+        throw new Error(d.error ?? 'Failed to initialize game')
+      }
+      const { gameId } = await initRes.json()
+
+      // Step 2: Upload directly from browser to Vercel Blob (no 4.5 MB serverless limit)
+      const ext = file.name.split('.').pop() || 'mp4'
+      await upload(`${gameId}/original.${ext}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/upload',
+        clientPayload: gameId,
+        onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
+      })
+
+      // Step 3: Navigate to game setup
+      router.push(`/setup/${gameId}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
       setUploading(false)

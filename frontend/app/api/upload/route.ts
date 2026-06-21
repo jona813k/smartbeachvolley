@@ -1,50 +1,54 @@
+import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/auth'
 import { sql } from '@/lib/db'
-import { put } from '@vercel/blob'
-import { randomUUID } from 'crypto'
 
-export const maxDuration = 300 // 5 min timeout for large video files
+export const maxDuration = 300
 
-// POST /api/upload — upload a video to Vercel Blob and create a game record
-export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+// PUT /api/upload — handles Vercel Blob client-side upload (token generation + completion callback)
+export async function PUT(request: NextRequest): Promise<NextResponse> {
+  const body = (await request.json()) as HandleUploadBody
 
   try {
-    const formData = await request.formData()
-    const file = formData.get('video') as File | null
-    const title = formData.get('title') as string | null
+    const jsonResponse = await handleUpload({
+      body,
+      request,
+      onBeforeGenerateToken: async (pathname, clientPayload) => {
+        // Verify the user is logged in before issuing an upload token
+        const session = await getSession()
+        if (!session) throw new Error('Unauthorized')
 
-    if (!file) {
-      return NextResponse.json({ error: 'No video file provided' }, { status: 400 })
-    }
-
-    const allowedTypes = ['video/mp4', 'video/quicktime', 'video/x-msvideo', 'video/webm', 'video/mpeg']
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json({ error: 'Unsupported video format. Use MP4, MOV, or WebM.' }, { status: 400 })
-    }
-
-    const gameId = randomUUID()
-    const ext = file.name.split('.').pop() || 'mp4'
-    const blobPath = `${gameId}/original.${ext}`
-
-    // Upload to Vercel Blob
-    const blob = await put(blobPath, file, {
-      access: 'public',
-      contentType: file.type,
+        return {
+          allowedContentTypes: [
+            'video/mp4',
+            'video/quicktime',
+            'video/x-msvideo',
+            'video/webm',
+            'video/mpeg',
+          ],
+          maximumSizeInBytes: 5 * 1024 * 1024 * 1024, // 5 GB
+          // Pass the gameId through so onUploadCompleted can update the DB row
+          tokenPayload: clientPayload ?? '',
+        }
+      },
+      onUploadCompleted: async ({ blob, tokenPayload }) => {
+        const gameId = tokenPayload
+        if (!gameId) {
+          console.error('onUploadCompleted: missing gameId in tokenPayload')
+          return
+        }
+        const filename = decodeURIComponent(blob.pathname.split('/').pop() ?? 'video')
+        await sql`
+          UPDATE games
+          SET video_path = ${blob.url}, video_filename = ${filename}
+          WHERE id = ${gameId}
+        `
+      },
     })
 
-    // Create game record
-    const rows = await sql`
-      INSERT INTO games (id, title, video_path, video_filename, status)
-      VALUES (${gameId}, ${title ?? null}, ${blob.url}, ${file.name}, 'pending_setup')
-      RETURNING *
-    `
-
-    return NextResponse.json(rows[0], { status: 201 })
+    return NextResponse.json(jsonResponse)
   } catch (err) {
-    console.error('Upload error:', err)
-    return NextResponse.json({ error: 'Upload failed' }, { status: 500 })
+    console.error('Upload handler error:', err)
+    return NextResponse.json({ error: (err as Error).message }, { status: 400 })
   }
 }
