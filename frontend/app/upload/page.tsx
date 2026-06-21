@@ -11,7 +11,6 @@ export default function UploadPage() {
   const [title, setTitle] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
-  const [progress, setProgress] = useState(0)
   const [error, setError] = useState('')
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -39,7 +38,6 @@ export default function UploadPage() {
 
     setUploading(true)
     setError('')
-    setProgress(0)
 
     try {
       // Step 1: Pre-create the game row to get a stable gameId
@@ -60,7 +58,6 @@ export default function UploadPage() {
         access: 'public',
         handleUploadUrl: '/api/upload',
         clientPayload: gameId,
-        onUploadProgress: ({ percentage }) => setProgress(Math.round(percentage)),
       })
 
       // Step 3: Navigate to game setup
@@ -68,7 +65,6 @@ export default function UploadPage() {
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Upload failed')
       setUploading(false)
-      setProgress(0)
     }
   }
 
@@ -133,18 +129,12 @@ export default function UploadPage() {
             />
           </div>
 
-          {/* Progress bar */}
+          {/* Upload indicator */}
           {uploading && (
             <div>
-              <div className="flex justify-between text-xs text-slate-400 mb-1">
-                <span>Uploading…</span>
-                <span>{progress}%</span>
-              </div>
-              <div className="w-full bg-slate-800 rounded-full h-2">
-                <div
-                  className="bg-blue-500 h-2 rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
+              <div className="text-xs text-slate-400 mb-1">Uploading…</div>
+              <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                <div className="bg-blue-500 h-2 rounded-full w-1/3 animate-pulse" />
               </div>
             </div>
           )}
@@ -160,7 +150,7 @@ export default function UploadPage() {
             disabled={uploading || !file}
             className="w-full bg-blue-600 hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold py-3 rounded-lg transition"
           >
-            {uploading ? `Uploading… ${progress}%` : 'Upload and continue'}
+            {uploading ? 'Uploading…' : 'Upload and continue'}
           </button>
         </form>
       </main>
