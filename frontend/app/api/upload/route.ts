@@ -5,8 +5,8 @@ import { sql } from '@/lib/db'
 
 export const maxDuration = 300
 
-// PUT /api/upload — handles Vercel Blob client-side upload (token generation + completion callback)
-export async function PUT(request: NextRequest): Promise<NextResponse> {
+// POST /api/upload — handles Vercel Blob client-side upload (token generation + completion callback)
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const body = (await request.json()) as HandleUploadBody
 
   try {
